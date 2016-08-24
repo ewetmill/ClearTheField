@@ -1,0 +1,12 @@
+apply plugin: 'java'
+apply plugin: 'eclipse'
+
+sourceCompatibility = 1.8
+version = '1.0'
+jar {
+    manifest {
+        attributes 'Implementation-Title': 'Clear the Field',
+                   'Implementation-Version': 1.0,
+                   'Main-Class': 'wetstds.ctf.BombFest'
+    }
+}
