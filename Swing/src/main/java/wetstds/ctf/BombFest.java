@@ -290,6 +290,7 @@ public class BombFest extends JFrame implements ActionListener, Runnable
             {
                String homeDir = System.getProperty("user.home");
                Path scorePath = Paths.get(homeDir, ".ctf", "scores.dat");
+               scorePath.getParent().toFile().mkdirs();
                istream = new FileInputStream(scorePath.toFile());
                scoreIStream = new ObjectInputStream( istream );
             }
