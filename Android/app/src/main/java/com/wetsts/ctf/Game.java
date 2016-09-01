@@ -6,9 +6,9 @@ import android.util.Log;
  * Created by ewetmill on 8/26/16.
  */
 public class Game {
-    private static final int NUM_ROWS = 10;
-    private static final int NUM_COLUMNS = 10;
-    private static final int TOTAL_MINES = 10;
+    public final int NUM_ROWS;
+    public final int NUM_COLUMNS;
+    public final int TOTAL_MINES;
 
     public enum State {
         WAITING,
@@ -21,14 +21,22 @@ public class Game {
     private int flaggedMines = 0;
     private CellListener listener;
 
-    private GridCell[][] cells = new GridCell[NUM_ROWS][NUM_COLUMNS];
+    private final GridCell[][] cells;
     private int[][] adjacentMines;
 
     public Game(){
-        boolean[][] mines = scatterMines();
+        this(10,10,10);
+    }
+
+    public Game(int rows, int columns, int totalMines){
+        NUM_ROWS = rows;
+        NUM_COLUMNS = columns;
+        TOTAL_MINES = totalMines;
+        cells = new GridCell[NUM_COLUMNS][NUM_ROWS];
+        boolean[][] mines = scatterMines(rows, columns);
         for (int row = 0; row < NUM_ROWS; row++) {
             for (int col = 0; col < NUM_COLUMNS; col++) {
-                cells[row][col] = new GridCell(mines[row][col]);
+                cells[col][row] = new GridCell(mines[col][row]);
             }
         }
         adjacentMines = calcAdjMines();
@@ -37,17 +45,17 @@ public class Game {
     public void reset() {
         state = State.WAITING;
         flaggedMines = 0;
-        boolean[][] mines = scatterMines();
+        boolean[][] mines = scatterMines(NUM_ROWS, NUM_COLUMNS);
         for (int row = 0; row < NUM_ROWS; row++) {
             for (int col = 0; col < NUM_COLUMNS; col++) {
-                cells[row][col] = new GridCell(mines[row][col]);
+                cells[col][row] = new GridCell(mines[col][row]);
             }
         }
         adjacentMines = calcAdjMines();
 
         for (int row = 0; row < NUM_ROWS; row++) {
             for (int col = 0; col < NUM_COLUMNS; col++) {
-                CellEvent event = new CellEvent(row, col, adjacentMines[row][col], cells[row][col]);
+                CellEvent event = new CellEvent(row, col, adjacentMines[col][row], cells[col][row]);
                 notify(event);
             }
         }
@@ -63,19 +71,19 @@ public class Game {
 
     private State clear(int row, int column, boolean clicked) {
         if (state != State.DEAD  &&
-                row >= 0 && row < NUM_COLUMNS &&
-                column >= 0 && column < NUM_ROWS ) {
+                row >= 0 && row < NUM_ROWS &&
+                column >= 0 && column < NUM_COLUMNS ) {
             if (state == State.WAITING) state = State.PLAYING;
 
-            GridCell.State previousState = cells[row][column].getState();
+            GridCell.State previousState = cells[column][row].getState();
             if (clicked && previousState == GridCell.State.CLEARED) {
                 clearBlankBoxes(row, column);
             }
             else {
                 if (previousState != GridCell.State.FLAGGED) {
-                    GridCell.State cellState = cells[row][column].inspect();
+                    GridCell.State cellState = cells[column][row].inspect();
 
-                    checkCellState(row, column, previousState, cells[row][column]);
+                    checkCellState(row, column, previousState, cells[column][row]);
                     switch (cellState) {
                         case CLEARED:
                             if (//!clicked &&
@@ -101,21 +109,33 @@ public class Game {
     }
 
     private boolean isCellBlank(int row, int column) {
-        return adjacentMines[row][column] == 0 && !cells[row][column].hasMine();
+        return adjacentMines[column][row] == 0 && !cells[column][row].hasMine();
+    }
+
+    public int getAdjMines(int row, int column) {
+        return adjacentMines[column][row];
+    }
+
+    public GridCell.State getCellState(int row, int column) {
+        return cells[column][row].getState();
+    }
+
+    public boolean hasMine(int row, int column) {
+        return cells[column][row].hasMine();
     }
 
     public void toggleFlag(int row, int column) {
         if (state != State.DEAD && state != State.CLEARED) {
-            GridCell.State previousState = cells[row][column].getState();
+            GridCell.State previousState = cells[column][row].getState();
 
             if (previousState == GridCell.State.HIDDEN) {
-                cells[row][column].dropFlag();
+                cells[column][row].dropFlag();
                 flaggedMines++;
             } else if (previousState == GridCell.State.FLAGGED) {
-                cells[row][column].clearFlag();
+                cells[column][row].clearFlag();
                 flaggedMines--;
             }
-            checkCellState(row, column, previousState, cells[row][column]);
+            checkCellState(row, column, previousState, cells[column][row]);
         }
     }
 
@@ -129,7 +149,7 @@ public class Game {
 
     private void checkCellState(int row, int column, GridCell.State previousState, GridCell cell) {
         if (previousState != cell.getState()) {
-            CellEvent event = new CellEvent(row, column, adjacentMines[row][column], cell);
+            CellEvent event = new CellEvent(row, column, adjacentMines[column][row], cell);
             notify(event);
         }
     }
@@ -171,12 +191,12 @@ public class Game {
     private boolean hasWon()
     {
         boolean result = true;
-        for( int h = 0; h < NUM_ROWS; h++ )
+        for( int row = 0; row < NUM_ROWS; row++ )
         {
-            for( int w = 0; w < NUM_COLUMNS; w++ )
+            for( int column = 0; column < NUM_COLUMNS; column++ )
             {
-                if( cells[w][h].getState() != GridCell.State.CLEARED &&
-                        !cells[w][h].hasMine() )
+                if( cells[column][row].getState() != GridCell.State.CLEARED &&
+                        !cells[column][row].hasMine() )
                     result = false;
             }
         }
@@ -192,65 +212,65 @@ public class Game {
     //-------------------------------------------------------------------------
     private int[][] calcAdjMines()
     {
-        int[][] adjMines = new int[NUM_ROWS][NUM_COLUMNS];
-        for( int h = 0; h < NUM_ROWS; h++ )
+        int[][] adjMines = new int[NUM_COLUMNS][NUM_ROWS];
+        for( int row = 0; row < NUM_ROWS; row++ )
         {
-            for( int w = 0; w < NUM_COLUMNS; w++ )
+            for( int col = 0; col < NUM_COLUMNS; col++ )
             {
                 int numMines = 0;
-                if( !cells[w][h].hasMine() )
+                if( !cells[col][row].hasMine() )
                 {
-                    if( (w - 1) >= 0 &&
-                            ( h - 1 ) >= 0 &&
-                            cells[w - 1][h - 1].hasMine() )
+                    if( (col - 1) >= 0 &&
+                            ( row - 1 ) >= 0 &&
+                            cells[col - 1][row - 1].hasMine() )
                         numMines++;
-                    if( ( h - 1 ) >= 0 && cells[w][h - 1].hasMine() )
+                    if( ( row - 1 ) >= 0 && cells[col][row - 1].hasMine() )
                         numMines++;
-                    if( (w + 1) < NUM_COLUMNS &&
-                            ( h - 1 ) >= 0 &&
-                            cells[w+1][h - 1].hasMine())
+                    if( (col + 1) < NUM_COLUMNS &&
+                            ( row - 1 ) >= 0 &&
+                            cells[col+1][row - 1].hasMine())
                         numMines++;
-                    if( (w + 1) < NUM_COLUMNS &&
-                            cells[w+1][h].hasMine())
+                    if( (col + 1) < NUM_COLUMNS &&
+                            cells[col+1][row].hasMine())
                         numMines++;
-                    if( (w + 1) < NUM_COLUMNS &&
-                            ( h + 1 ) < NUM_ROWS &&
-                            cells[w+1][h+1].hasMine())
+                    if( (col + 1) < NUM_COLUMNS &&
+                            ( row + 1 ) < NUM_ROWS &&
+                            cells[col+1][row+1].hasMine())
                         numMines++;
-                    if( ( h + 1 ) < NUM_ROWS &&
-                            cells[w][h+1].hasMine())
+                    if( ( row + 1 ) < NUM_ROWS &&
+                            cells[col][row+1].hasMine())
                         numMines++;
-                    if( (w - 1) >= 0 &&
-                            ( h + 1 ) < NUM_ROWS &&
-                            cells[w-1][h+1].hasMine())
+                    if( (col - 1) >= 0 &&
+                            ( row + 1 ) < NUM_ROWS &&
+                            cells[col-1][row+1].hasMine())
                         numMines++;
-                    if( (w - 1) >= 0 &&
-                            cells[w-1][h].hasMine())
+                    if( (col - 1) >= 0 &&
+                            cells[col-1][row].hasMine())
                         numMines++;
                 }
                 else {
                     numMines = 44;
                 }
 
-                adjMines[w][h]=numMines;
+                adjMines[col][row]=numMines;
             }
         }
         return adjMines;
     }
 
-    private static boolean[][] scatterMines() {
-        boolean[][] result = new boolean[NUM_ROWS][NUM_COLUMNS];
+    private boolean[][] scatterMines(int rows, int columns) {
+        boolean[][] result = new boolean[columns][rows];
 
         for (int mines = 0; mines < TOTAL_MINES; mines++) {
-            int row = (int)(NUM_COLUMNS * Math.random());
-            int column = (int)(NUM_ROWS * Math.random());
+            int row = (int)(rows * Math.random());
+            int column = (int)(columns * Math.random());
 
-            while( result[row][column])
+            while( result[column][row])
             {
-                row = (int)(NUM_COLUMNS * Math.random());
-                column = (int)(NUM_ROWS * Math.random());
+                row = (int)(rows * Math.random());
+                column = (int)(columns * Math.random());
             }
-            result[row][column] = true;
+            result[column][row] = true;
         }
 
         return result;

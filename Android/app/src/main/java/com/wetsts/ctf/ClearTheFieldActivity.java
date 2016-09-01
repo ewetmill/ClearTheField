@@ -1,10 +1,9 @@
 package com.wetsts.ctf;
 
+import android.content.res.Configuration;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.os.Handler;
-import android.support.design.widget.FloatingActionButton;
-import android.support.design.widget.Snackbar;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.view.MotionEvent;
@@ -18,17 +17,16 @@ import android.widget.TableRow;
 import android.widget.TextView;
 
 public class ClearTheFieldActivity extends AppCompatActivity implements CellListener {
-    // TODO Clear the field when the game is lost
     // TODO Make icons better
     // TODO Add Top Times
-    // TODO Add Expert Mode when turned Landscape
     // TODO Save state when rotated
+    // TODO Make application Icon
 
     Game game;
     Handler timer;
     int time = 0;
 
-    Button[][] buttons = new Button[10][10];
+    Button[][] buttons;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -36,25 +34,24 @@ public class ClearTheFieldActivity extends AppCompatActivity implements CellList
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
 
-       FloatingActionButton fab = (FloatingActionButton) findViewById(R.id.fab);
-        fab.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                Snackbar.make(view, "Replace with your own action", Snackbar.LENGTH_LONG)
-                        .setAction("Action", null).show();
-            }
-        });
+        int orientation = getResources().getConfiguration().orientation;
 
-        game = new Game();
+        if (orientation == Configuration.ORIENTATION_PORTRAIT) {
+            game = new Game();
+        }
+        else {
+            game = new Game(6, 15, 15);
+        }
+        buttons = new Button[game.NUM_COLUMNS][game.NUM_ROWS];
         timer = new Handler();
         game.setCellListener(this);
 
         TableLayout fieldLayout = (TableLayout) findViewById(R.id.fieldLayout);
-        for(int row = 0; row < 10; row++) {
+        for(int row = 0; row < game.NUM_ROWS; row++) {
             TableRow rowWidget = new TableRow(this);
-            for (int col = 0; col < 10; col++) {
+            for (int col = 0; col < game.NUM_COLUMNS; col++) {
                 Button cell = new Button(this);
-                buttons[row][col] = cell;
+                buttons[col][row] = cell;
 
                 cell.setOnTouchListener(new View.OnTouchListener() {
                     @Override
@@ -73,13 +70,13 @@ public class ClearTheFieldActivity extends AppCompatActivity implements CellList
                     }
                 });
 
-                final int x = row;
-                final int y = col;
+                final int r = row;
+                final int c = col;
                 cell.setOnLongClickListener(new View.OnLongClickListener() {
                     @Override
                     public boolean onLongClick(View v) {
                         Button button = (Button) v;
-                        game.toggleFlag(x, y);
+                        game.toggleFlag(r, c);
 
                         TextView mineCountView = (TextView) findViewById(R.id.bombsView);
                         mineCountView.setText(Integer.toString(game.getRemainingMines()));
@@ -91,7 +88,7 @@ public class ClearTheFieldActivity extends AppCompatActivity implements CellList
                     @Override
                     public void onClick(View v) {
                         Button button = (Button) v;
-                        Game.State state = game.inspect(x,y);
+                        Game.State state = game.inspect(r,c);
                         if (state == Game.State.DEAD) {
                             ImageButton resetButton = (ImageButton) findViewById(R.id.resetButton);
                             resetButton.setImageResource(R.drawable.sad_face_icon);
@@ -99,6 +96,7 @@ public class ClearTheFieldActivity extends AppCompatActivity implements CellList
                         else if (state == Game.State.CLEARED) {
                             ImageButton resetButton = (ImageButton) findViewById(R.id.resetButton);
                             resetButton.setImageResource(R.drawable.win_face_icon);
+                            endGame();
                         }
                     }
                 });
@@ -165,30 +163,72 @@ public class ClearTheFieldActivity extends AppCompatActivity implements CellList
 
     @Override
     public void cellChanged(CellEvent event) {
-        int row = event.getRow();
-        int col = event.getColumn();
-        switch (event.getState()) {
-            case CLEARED:
-                buttons[row][col].setBackgroundResource(R.drawable.cleared_cell);
-                int adjCells = event.getAdjacentCells();
-                if (adjCells > 0) {
-                    buttons[row][col].setTextColor(getAdjMinesColor(adjCells));
-                    buttons[row][col].setTextSize(16);
-                    buttons[row][col].setText(Integer.toString(adjCells));
+            int row = event.getRow();
+            int col = event.getColumn();
+            switch (event.getState()) {
+                case CLEARED:
+                    buttons[col][row].setBackgroundResource(R.drawable.cleared_cell);
+                    int adjCells = event.getAdjacentCells();
+                    if (adjCells > 0) {
+                        buttons[col][row].setTextColor(getAdjMinesColor(adjCells));
+                        buttons[col][row].setTextSize(16);
+                        buttons[col][row].setText(Integer.toString(adjCells));
+                    }
+                    break;
+                case FLAGGED:
+                    buttons[col][row].setPadding(20,0,0,0);
+                    buttons[col][row].setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.flag_icon,0, 0, 0);
+                    //buttons[col][row].setBackgroundResource(R.drawable.flag_icon);
+                    break;
+                case DETONATED:
+                    endGame();
+                    break;
+                case HIDDEN:
+                    buttons[col][row].setCompoundDrawablesWithIntrinsicBounds(0, 0, 0, 0);
+                    buttons[col][row].setBackgroundResource(R.drawable.hidden_cell);
+                    buttons[col][row].setText("");
+                    break;
+                default:
+                    break;
+            }
+    }
+
+    private void endGame() {
+        for (int row = 0 ; row < game.NUM_ROWS; row++) {
+            for (int col = 0; col < game.NUM_COLUMNS; col++) {
+                GridCell.State state = game.getCellState(row, col);
+                switch (state) {
+                    case DETONATED:
+                        buttons[col][row].setBackgroundResource(R.drawable.cleared_cell);
+                        buttons[col][row].setPadding(20,0,0,0);
+                        buttons[col][row].setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.boom_bomb_icon,0, 0, 0);
+                        break;
+                    case FLAGGED:
+                        if (!game.hasMine(row, col)) {
+                            buttons[col][row].setPadding(20,0,0,0);
+                            buttons[col][row].setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.wrong_flag_icon,0, 0, 0);
+                        }
+                        break;
+                    case HIDDEN:
+                        if (game.hasMine(row, col)) {
+                            buttons[col][row].setBackgroundResource(R.drawable.cleared_cell);
+                            buttons[col][row].setPadding(20,0,0,0);
+                            buttons[col][row].setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.bomb_icon,0, 0, 0);
+                        }
+                        else {
+                            int adjMines = game.getAdjMines(row, col);
+                            if (adjMines > 0) {
+                                buttons[col][row].setTextColor(getAdjMinesColor(adjMines));
+                                buttons[col][row].setTextSize(16);
+                                buttons[col][row].setText(Integer.toString(adjMines));
+                            }
+                            buttons[col][row].setBackgroundResource(R.drawable.cleared_cell);
+                        }
+                        break;
+                    default:
+                        break;
                 }
-                break;
-            case FLAGGED:
-                buttons[row][col].setBackgroundResource(R.drawable.flag_icon);
-                break;
-            case DETONATED:
-                buttons[row][col].setBackgroundResource(R.drawable.boom_bomb_icon);
-                break;
-            case HIDDEN:
-                buttons[row][col].setBackgroundResource(R.drawable.hidden_cell);
-                buttons[row][col].setText("");
-                break;
-            default:
-                break;
+            }
         }
     }
 
